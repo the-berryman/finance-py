@@ -7,6 +7,16 @@
 
 # a print statement
 print('Hello, Fintech!')
+print(4%2==0)
+list1 = []
+list1.append('pee')
+print(list1)
+portfolio = {'GOOGL': 109, 'META': 157, 'MSFT': 263, 'AAPL': 158, 'AMZN': 128}
+del (portfolio['MSFT'])
+portfolio['TWTR'] = 16
+
+print(portfolio)
+
 
 # variables
 keys = ['GOOGL', 'META', 'MSFT']
