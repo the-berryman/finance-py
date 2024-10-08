@@ -1,4 +1,4 @@
-# Names: Mia Bruno (PID: ), Gavin Berryman (PID: 5619712), Devin Davis (PID: 3921337)
+# Names: Mia Bruno (PID: 4399000), Gavin Berryman (PID: 5619712), Devin Davis (PID: 3921337)
 # Date: 9/22/2024
 
 
@@ -37,7 +37,7 @@ list2 = [7,-6,-3,0,3,6]
 print(product(list1,list2))
 
 # Function #3 C-1.28
-# find the Euclidean norn or length of the vector based on p=2 and vector coordinates
+# find the Euclidean norm or length of the vector based on p=2 and vector coordinates
 def norm(v, p):
     solution = math.sqrt(v[0]**p + v[1]**p)
     return solution
