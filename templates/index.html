@@ -93,15 +93,21 @@
     </form>
 
     <script>
-        document.getElementById('married').addEventListener('change', function() {
-            var spouseSection = document.getElementById('spouse_section');
-            spouseSection.classList.toggle('hidden', this.value === 'no');
-        });
+       document.getElementById('married').addEventListener('change', function() {
+    var spouseSection = document.getElementById('spouse_section');
+    var spouseIncomeInput = document.getElementById('spouse_income');
+    spouseSection.classList.toggle('hidden', this.value === 'no');
+    if (this.value === 'no') {
+        spouseIncomeInput.required = false;
+    }
+});
 
-        document.getElementById('spouse_work').addEventListener('change', function() {
-            var spouseIncomeSection = document.getElementById('spouse_income_section');
-            spouseIncomeSection.classList.toggle('hidden', this.value === 'no');
-        });
+document.getElementById('spouse_work').addEventListener('change', function() {
+    var spouseIncomeSection = document.getElementById('spouse_income_section');
+    var spouseIncomeInput = document.getElementById('spouse_income');
+    spouseIncomeSection.classList.toggle('hidden', this.value === 'no');
+    spouseIncomeInput.required = this.value === 'yes';
+});
     </script>
 </body>
 </html>

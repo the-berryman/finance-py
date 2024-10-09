@@ -32,19 +32,14 @@ LIFE_EVENTS = {
     "Spouse Income": [0.03, 0.03, 0.02, 0.01, 0.01]
 }
 
-def get_user_inputs():
-    age = int(input("How old are you? "))
-    income = int(input("What is your income? "))
-    retirement_age = int(input("At what age would you like to retire? "))
-    married = input("Are you married? ").lower() == "yes"
-    spouse_income = 0
-    if married:
-        spouse_work = input("Does your spouse work? ").lower() == "yes"
-        if spouse_work:
-            spouse_income = int(input("What is your spouse's income? "))
-    target_amt = int(input("What is your retirement savings target? "))
-
-    return age, income, retirement_age, married, spouse_income, target_amt
+CONTRIBUTION_RATES = {
+    "0-29": 0.10,  # 10% of income
+    "30-39": 0.15,  # 15% of income
+    "40-49": 0.20,  # 20% of income
+    "50-59": 0.25,  # 25% of income
+    "60-69": 0.30,  # 30% of income
+    "70+": 0.30  # 30% of income
+}
 
 
 def get_age_range(age):
@@ -62,95 +57,96 @@ def get_age_range(age):
         return "70+"
 
 
-def calculate_allocation(age, income, married, spouse_income):
+def calculate_annual_contribution(income, spouse_income, age):
+    total_income = income + spouse_income
     age_range = get_age_range(age)
-    base_allocation = AGE_ALLOCATIONS[age_range]
-
-    if married:
-        if spouse_income > 0:
-            adjustment = LIFE_EVENTS["Spouse Income"]
-        else:
-            adjustment = LIFE_EVENTS["Married"]
-        allocation = [a + b for a, b in zip(base_allocation, adjustment)]
-    else:
-        allocation = base_allocation
-
-    return [(asset, alloc * income) for asset, alloc in zip(ASSETS["Asset Class"], allocation)]
+    contribution_rate = CONTRIBUTION_RATES[age_range]
+    return total_income * contribution_rate
 
 
-def calculate_retirement_savings(age, income, retirement_age, married, spouse_income):
+def calculate_retirement_savings(age, income, retirement_age, married, spouse_income, target_amt):
     total_allocation = {asset: 0 for asset in ASSETS["Asset Class"]}
     years = retirement_age - age
+    years_to_target = None
+    total_savings = 0
 
     for year in range(years):
         current_age = age + year
-        allocation = calculate_allocation(current_age, income, married, spouse_income)
+        annual_contribution = calculate_annual_contribution(income, spouse_income, current_age)
 
-        for asset, amount in allocation:
-            total_allocation[asset] += amount
+        for asset, alloc in zip(ASSETS["Asset Class"], AGE_ALLOCATIONS[get_age_range(current_age)]):
+            contribution = annual_contribution * alloc
+            growth_rate = GROWTH_RATES[asset]
+            total_allocation[asset] += contribution * (growth_rate ** (years - year))
 
-        if year == 0 or (year + 1) % 10 == 0:
-            print(f"\nAllocation at age {current_age}:")
-            for asset, amount in allocation:
-                print(f"{asset}: ${amount:,.2f} per year")
+        total_savings = sum(total_allocation.values())
+        if total_savings >= target_amt and years_to_target is None:
+            years_to_target = year + 1
 
-    compound_allocation = {
-        asset: round(amount * (GROWTH_RATES[asset] ** years), 2)
-        for asset, amount in total_allocation.items()
-    }
+    return total_allocation, years_to_target
 
-    return compound_allocation
 
 def calculate_years_to_target(current_savings, annual_contribution, target_amount, average_growth_rate):
-    return math.ceil(math.log(target_amount / (current_savings * average_growth_rate + annual_contribution) + 1) /
-                     math.log(average_growth_rate))
+    if current_savings >= target_amount:
+        return 0
+
+    years = 0
+    while current_savings < target_amount and years < 100:  # Cap at 100 years to prevent infinite loop
+        current_savings = (current_savings + annual_contribution) * average_growth_rate
+        years += 1
+
+    return years if years < 100 else "100+"
 
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('chatbot.html')
 
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
     try:
-        age = int(request.form['age'])
-        income = int(request.form['income'])
-        retirement_age = int(request.form['retirement_age'])
-        married = request.form['married'] == 'yes'
+        data = request.json
+        app.logger.debug(f"Received data: {data}")  # Log received data
 
-        # Handle spouse income more carefully
+        age = int(data['age'])
+        income = int(data['income'])
+        retirement_age = int(data['retirement_age'])
+        target_amt = int(data['target_amt'])
+        married = data.get('married', False)
+
         spouse_income = 0
         if married:
-            spouse_work = request.form.get('spouse_work') == 'yes'
+            spouse_work = data.get('spouse_work', False)
             if spouse_work:
-                spouse_income_str = request.form.get('spouse_income', '')
-                spouse_income = int(spouse_income_str) if spouse_income_str else 0
+                spouse_income = int(data.get('spouse_income', 0))
 
-        target_amt = int(request.form['target_amt'])
+        app.logger.debug(f"Processed inputs: age={age}, income={income}, retirement_age={retirement_age}, "
+                         f"target_amt={target_amt}, married={married}, spouse_income={spouse_income}")
 
-        compound_allocation = calculate_retirement_savings(age, income, retirement_age, married, spouse_income)
+        compound_allocation, years_to_target = calculate_retirement_savings(age, income, retirement_age, married,
+                                                                            spouse_income, target_amt)
 
         total_savings = sum(compound_allocation.values())
         years_to_retirement = retirement_age - age
-        average_annual_contribution = total_savings / years_to_retirement
-        average_growth_rate = sum(GROWTH_RATES.values()) / len(GROWTH_RATES)
-
-        years_to_target = calculate_years_to_target(total_savings, average_annual_contribution, target_amt,
-                                                    average_growth_rate)
+        current_annual_contribution = calculate_annual_contribution(income, spouse_income, age)
 
         results = {
             'allocation': {asset: f"${value:,.2f}" for asset, value in compound_allocation.items()},
             'total_savings': f"${total_savings:,.2f}",
-            'years_to_target': years_to_target,
-            'target_amount': f"${target_amt:,.2f}"
+            'years_to_target': years_to_target if years_to_target is not None else "Not reached",
+            'target_amount': f"${target_amt:,.2f}",
+            'annual_contribution': f"${current_annual_contribution:,.2f}",
+            'years_to_retirement': years_to_retirement,
+            'excess_savings': f"${max(total_savings - target_amt, 0):,.2f}"
         }
 
-        return jsonify(results)
-    except ValueError as e:
-        return jsonify(
-            {'error': f'Invalid input. Please ensure all fields are filled with valid numbers. Details: {str(e)}'}), 400
+        app.logger.debug(f"Calculation results: {results}")  # Log results
 
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error(f"Error in calculate: {str(e)}", exc_info=True)  # Log the full exception
+        return jsonify({'error': f'An error occurred: {str(e)}. Please try again.'}), 400
 
 if __name__ == "__main__":
     app.run(debug=True)
