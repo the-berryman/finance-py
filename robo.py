@@ -1,10 +1,11 @@
 import math
+from flask import Flask, request, render_template, jsonify, send_file, session
+from io import BytesIO, StringIO
 import csv
-from io import StringIO
-from io import BytesIO
-from flask import Flask, request, render_template, jsonify, send_file
+import os
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secret_key')
 
 
 # Constants
@@ -113,8 +114,12 @@ def calculate_years_to_target(current_savings, annual_contribution, target_amoun
 
 @app.route('/')
 def index():
+    app.logger.info("Rendering index page")
     return render_template('chatbot.html')
 
+@app.before_request
+def before_request():
+    app.logger.debug(f"Received request: {request.method} {request.path}")
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -170,10 +175,10 @@ def calculate():
                 writer.writerow([key, value])
 
         csv_data.seek(0)
-        app.config['LAST_CSV'] = csv_data.getvalue().encode('utf-8')
+        session['LAST_CSV'] = csv_data.getvalue()
 
-        app.logger.debug(f"CSV data type: {type(app.config['LAST_CSV'])}")
-        app.logger.debug(f"CSV data length: {len(app.config['LAST_CSV'])}")
+        app.logger.debug(f"CSV data type: {type(session['LAST_CSV'])}")
+        app.logger.debug(f"CSV data length: {len(session['LAST_CSV'])}")
 
         return jsonify(results)
     except Exception as e:
@@ -182,15 +187,22 @@ def calculate():
 
 @app.route('/download-csv')
 def download_csv():
-    if 'LAST_CSV' not in app.config:
+    if 'LAST_CSV' not in session:
+        app.logger.warning("No CSV data available in session for download")
         return "No data available", 404
 
-    csv_data = BytesIO(app.config['LAST_CSV'])
+    csv_data = BytesIO(session['LAST_CSV'].encode('utf-8'))
     csv_data.seek(0)
     return send_file(csv_data,
                      mimetype='text/csv',
                      as_attachment=True,
                      download_name='retirement_plan_results.csv')
+@app.after_request
+def after_request(response):
+    app.logger.debug(f"Sending response: {response.status}")
+    return response
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
