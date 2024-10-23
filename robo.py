@@ -202,7 +202,5 @@ def after_request(response):
     app.logger.debug(f"Sending response: {response.status}")
     return response
 
-
-
 if __name__ == "__main__":
     app.run(debug=True)
